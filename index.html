@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ScryParse</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+            <button class="tab-btn active" onclick="switchTab('download')" title="Download card data from sets">
+                📥 Download
+            </button>
+            <button class="tab-btn" onclick="switchTab('tokenize')" title="Tokenize card text for ML">
+                🔤 Tokenize
+            </button>
+        </div>
+
+        <!-- Download Tab -->
+        <div id="download-tab" class="tab-content active">
+            <h1>📥 Card Data Download</h1>
+            <p class="subtitle">Download MTG card text data for machine learning via Scryfall API</p>
+            
+            <div class="input-group">
+                <label for="setCode">Enter Set Code:</label>
+                <input type="text" id="setCode" placeholder="e.g., ELD" maxlength="4">
+            </div>
+            
+            <div class="button-group">
+                <button class="download-btn" onclick="downloadSet()">
+                    📥 Download Cards
+                </button>
+            </div>
+            
+            <div id="status" class="status hidden"></div>
+            
+            <div class="examples">
+                <h3>Popular Set Codes:</h3>
+                <ul>
+                    <li>
+                        <span>Throne of Eldraine</span>
+                        <span class="set-code" onclick="fillSetCode('ELD')">ELD</span>
+                    </li>
+                    <li>
+                        <span>Murders at Karlov Manor</span>
+                        <span class="set-code" onclick="fillSetCode('MKM')">MKM</span>
+                    </li>
+                    <li>
+                        <span>Outlaws of Thunder Junction</span>
+                        <span class="set-code" onclick="fillSetCode('OTJ')">OTJ</span>
+                    </li>
+                    <li>
+                        <span>Bloomburrow</span>
+                        <span class="set-code" onclick="fillSetCode('BLB')">BLB</span>
+                    </li>
+                    <li>
+                        <span>Duskmourn: House of Horror</span>
+                        <span class="set-code" onclick="fillSetCode('DSK')">DSK</span>
+                    </li>
+                    <li>
+                        <span>Foundations</span>
+                        <span class="set-code" onclick="fillSetCode('FDN')">FDN</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Tokenize Tab -->
+        <div id="tokenize-tab" class="tab-content">
+            <h1>🔤 Text Tokenization</h1>
+            <p class="subtitle">Convert card text into tokens for machine learning</p>
+            
+            <div class="input-group">
+                <label for="cardDataFile">Load Card Data File:</label>
+                <div class="file-input-container">
+                    <input type="file" id="cardDataFile" accept=".json" multiple onchange="loadCardDataFiles(this)">
+                    <div class="file-input-display">
+                        <span class="file-icon">📁</span>
+                        <span class="file-text">Choose JSON files from Download step (multiple files supported)</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tokenize-status" class="status hidden"></div>
+
+            <div id="loaded-files" class="loaded-files hidden">
+                <h3>Loaded Files:</h3>
+                <ul id="loaded-files-list"></ul>
+            </div>
+            
+            <div class="button-group">
+                <button class="download-btn" disabled onclick="generateTokens()">
+                    🔤 Generate Tokens
+                </button>
+                <button class="clear-btn" disabled onclick="previewTokens()">
+                    📊 Preview Tokens
+                </button>
+            </div>
+            
+            <div id="token-preview" class="token-preview hidden">
+                <h3>Token Preview</h3>
+                <button class="close-preview-btn" onclick="closePreview()">✕</button>
+                <pre id="token-preview-content"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="scryfallfetch.js"></script>
+    <script src="tokenizer.js"></script>
+    <script>
+        // Global variable to store loaded card data
+        let loadedCardData = {};
+
+        // Tab switching functionality
+        function switchTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName + '-tab').classList.add('active');
+            
+            // Add active class to clicked tab button
+            event.target.classList.add('active');
+            
+            // Clear any status messages when switching tabs
+            const statusDiv = document.getElementById('status');
+            if (statusDiv) {
+                statusDiv.classList.add('hidden');
+            }
+            
+            // Hide token preview when switching tabs
+            const previewDiv = document.getElementById('token-preview');
+            if (previewDiv) {
+                previewDiv.classList.add('hidden');
+            }
+        }
+
+        // Function to load multiple card data files
+        function loadCardDataFiles(fileInput) {
+            const files = Array.from(fileInput.files);
+            if (files.length === 0) return;
+
+            let loadedCount = 0;
+            let failedCount = 0;
+            const loadedFilesList = document.getElementById('loaded-files-list');
+            const loadedFilesDiv = document.getElementById('loaded-files');
+            const fileDisplay = document.querySelector('.file-text');
+            
+            // Clear previous loaded files display
+            loadedFilesList.innerHTML = '';
+            
+            // Update file input display to show loading
+            fileDisplay.textContent = `Loading ${files.length} file(s)...`;
+            
+            // Process each file
+            files.forEach((file, index) => {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    try {
+                        const cardData = JSON.parse(e.target.result);
+                        
+                        // Store the loaded data with filename as key
+                        loadedCardData[file.name] = cardData;
+                        
+                        // Add to loaded files display
+                        const listItem = document.createElement('li');
+                        listItem.innerHTML = `
+                            <span class="file-name">📄 ${file.name}</span>
+                            <span class="file-info">${cardData.length || Object.keys(cardData).length} cards</span>
+                            <button class="remove-file-btn" onclick="removeLoadedFile('${file.name}')">✕</button>
+                        `;
+                        loadedFilesList.appendChild(listItem);
+                        
+                        loadedCount++;
+                        updateLoadingStatus();
+                        
+                        console.log(`Loaded card data from ${file.name}:`, cardData);
+                        
+                    } catch (error) {
+                        console.error(`Error parsing JSON file ${file.name}:`, error);
+                        
+                        // Add error to loaded files display
+                        const listItem = document.createElement('li');
+                        listItem.innerHTML = `
+                            <span class="file-name error">❌ ${file.name}</span>
+                            <span class="file-info">Error: ${error.message}</span>
+                        `;
+                        loadedFilesList.appendChild(listItem);
+                        
+                        failedCount++;
+                        updateLoadingStatus();
+                    }
+                };
+                
+                reader.onerror = function() {
+                    console.error(`Error reading file ${file.name}`);
+                    
+                    // Add error to loaded files display
+                    const listItem = document.createElement('li');
+                    listItem.innerHTML = `
+                        <span class="file-name error">❌ ${file.name}</span>
+                        <span class="file-info">Error reading file</span>
+                    `;
+                    loadedFilesList.appendChild(listItem);
+                    
+                    failedCount++;
+                    updateLoadingStatus();
+                };
+                
+                reader.readAsText(file);
+            });
+            
+            function updateLoadingStatus() {
+                const totalProcessed = loadedCount + failedCount;
+                
+                if (totalProcessed === files.length) {
+                    // All files processed
+                    if (loadedCount > 0) {
+                        // Update file input display with success/error info
+                        if (failedCount > 0) {
+                            fileDisplay.textContent = `📄 ${loadedCount} loaded, ${failedCount} failed`;
+                        } else {
+                            fileDisplay.textContent = `📄 ${loadedCount} file(s) loaded`;
+                        }
+                        
+                        // Show loaded files section
+                        loadedFilesDiv.classList.remove('hidden');
+                        
+                        // Enable tokenization options and buttons
+                        enableTokenizationControls();
+                    } else {
+                        // All files failed
+                        fileDisplay.textContent = `❌ Failed to load all files`;
+                    }
+                } else {
+                    // Still processing
+                    fileDisplay.textContent = `Loading... (${totalProcessed}/${files.length})`;
+                }
+            }
+        }
+
+        // Function to remove a loaded file
+        function removeLoadedFile(filename) {
+            delete loadedCardData[filename];
+            
+            // Remove from UI
+            const loadedFilesList = document.getElementById('loaded-files-list');
+            const items = loadedFilesList.querySelectorAll('li');
+            items.forEach(item => {
+                if (item.querySelector('.file-name').textContent.includes(filename)) {
+                    item.remove();
+                }
+            });
+            
+            // Update file input display
+            const remainingCount = Object.keys(loadedCardData).length;
+            const fileDisplay = document.querySelector('.file-text');
+            
+            if (remainingCount === 0) {
+                fileDisplay.textContent = 'Choose JSON files from Download step (multiple files supported)';
+                
+                // Hide loaded files section
+                document.getElementById('loaded-files').classList.add('hidden');
+                
+                // Disable tokenization controls
+                disableTokenizationControls();
+            } else {
+                fileDisplay.textContent = `📄 ${remainingCount} file(s) loaded`;
+            }
+        }
+
+        // Function to disable tokenization controls
+        function disableTokenizationControls() {
+            // Disable buttons
+            const buttons = document.querySelectorAll('#tokenize-tab button');
+            buttons.forEach(btn => btn.disabled = true);
+        }
+
+        // Function to clear all loaded files
+        function clearAllFiles() {
+            // Clear the data
+            loadedCardData = {};
+            
+            // Clear the UI
+            const loadedFilesList = document.getElementById('loaded-files-list');
+            loadedFilesList.innerHTML = '';
+            
+            // Hide loaded files section
+            document.getElementById('loaded-files').classList.add('hidden');
+            
+            // Reset file input
+            const fileInput = document.getElementById('cardDataFile');
+            fileInput.value = '';
+            
+            // Reset file input display
+            const fileDisplay = document.querySelector('.file-text');
+            fileDisplay.textContent = 'Choose JSON files from Download step (multiple files supported)';
+            
+            // Disable tokenization controls
+            disableTokenizationControls();
+        }
+
+        // Function to enable tokenization controls after file is loaded
+        function enableTokenizationControls() {
+            // Enable buttons
+            const buttons = document.querySelectorAll('#tokenize-tab button');
+            buttons.forEach(btn => btn.disabled = false);
+        }
+
+        // Function to generate tokens from loaded card data
+        function generateTokens() {
+            if (Object.keys(loadedCardData).length === 0) {
+                alert('Please load a card data file first!');
+                return;
+            }
+
+            const fileDisplay = document.querySelector('.file-text');
+            const originalText = fileDisplay.textContent;
+            fileDisplay.textContent = 'Generating tokens...';
+
+            try {
+                const tokenizer = new MTGTokenizer();
+                const results = {};
+
+                // Process each loaded file
+                for (const [filename, cardData] of Object.entries(loadedCardData)) {
+                    const cards = Array.isArray(cardData) ? cardData : [cardData];
+                    const tokenized = tokenizer.tokenizeCards(cards);
+                    results[filename] = tokenized;
+                }
+
+                // Create downloadable JSON file
+                const jsonData = JSON.stringify(results, null, 2);
+                const blob = new Blob([jsonData], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'tokenized_cards.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                // Restore original text after a brief success message
+                fileDisplay.textContent = 'Tokens downloaded!';
+                setTimeout(() => {
+                    fileDisplay.textContent = originalText;
+                }, 2000);
+
+            } catch (error) {
+                console.error('Error generating tokens:', error);
+                fileDisplay.textContent = `Error: ${error.message}`;
+                setTimeout(() => {
+                    fileDisplay.textContent = originalText;
+                }, 3000);
+            }
+        }
+
+        // Function to preview tokens from loaded card data
+        function previewTokens() {
+            if (Object.keys(loadedCardData).length === 0) {
+                alert('Please load a card data file first!');
+                return;
+            }
+
+            const fileDisplay = document.querySelector('.file-text');
+            const originalText = fileDisplay.textContent;
+            fileDisplay.textContent = 'Generating preview...';
+
+            try {
+                const tokenizer = new MTGTokenizer();
+                let previewText = '';
+
+                // Process each loaded file
+                for (const [filename, cardData] of Object.entries(loadedCardData)) {
+                    const cards = Array.isArray(cardData) ? cardData : [cardData];
+                    const tokenized = tokenizer.tokenizeCards(cards);
+                    
+                    previewText += `=== ${filename} ===\n`;
+                    previewText += `Cards processed: ${tokenized.stats.totalCards}\n`;
+                    previewText += `Vocabulary size: ${tokenized.stats.vocabularySize}\n`;
+                    previewText += `Unknown tokens: ${tokenized.stats.unknownTokenCount}\n`;
+                    previewText += `Total tokens: ${tokenized.stats.totalTokens}\n\n`;
+                    
+                    // Show sample of first few tokenized cards
+                    previewText += 'Sample tokenized cards:\n';
+                    tokenized.tokenizedCards.slice(0, 3).forEach((card, index) => {
+                        previewText += `\n${index + 1}. ${card.cardId}\n`;
+                        previewText += `   Type: ${card.tokens.type?.join(' ') || 'N/A'}\n`;
+                        previewText += `   Text: ${card.tokens.text?.join(' ') || 'N/A'}\n`;
+                    });
+                    
+                    previewText += '\n' + '='.repeat(50) + '\n';
+                }
+
+                // Show the preview in the div
+                const previewDiv = document.getElementById('token-preview');
+                const previewContent = document.getElementById('token-preview-content');
+                
+                previewContent.textContent = previewText;
+                previewDiv.classList.remove('hidden');
+
+                // Restore original text after a brief success message
+                fileDisplay.textContent = 'Preview generated!';
+                setTimeout(() => {
+                    fileDisplay.textContent = originalText;
+                }, 2000);
+
+            } catch (error) {
+                console.error('Error generating preview:', error);
+                fileDisplay.textContent = `Error: ${error.message}`;
+                setTimeout(() => {
+                    fileDisplay.textContent = originalText;
+                }, 3000);
+            }
+        }
+
+        // Function to close the token preview
+        function closePreview() {
+            const previewDiv = document.getElementById('token-preview');
+            previewDiv.classList.add('hidden');
+        }
+
+        // Placeholder functions for future implementation
+        function fillExample(type) {
+            const examples = {
+                lightning: "Lightning Bolt\nInstant\nLightning Bolt deals 3 damage to any target.",
+                creature: "Grizzly Bears\nCreature — Bear\nA classic creature with 2 power and 2 toughness.",
+                planeswalker: "Jace, the Mind Sculptor\nLegendary Planeswalker — Jace\n[+2]: Look at the top card of target player's library..."
+            };
+            
+            document.getElementById('cardTextInput').value = examples[type] || '';
+        }
+    </script>
+</body>
+</html>

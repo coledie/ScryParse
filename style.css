@@ -190,13 +190,15 @@ button {
 }
 
 .status.success {
-    background: #e8f5e8;
-    color: #2e7d32;
+    background: #d4edda;
+    border-color: #c3e6cb;
+    color: #155724;
 }
 
 .status.error {
-    background: #ffebee;
-    color: #c62828;
+    background: #f8d7da;
+    border-color: #f5c6cb;
+    color: #721c24;
 }
 
 /* Examples Section */
@@ -480,6 +482,93 @@ button {
     border: 1px solid #dee2e6;
     max-height: 300px;
     overflow-y: auto;
+}
+
+/* Configuration UI Styles */
+.load-default-btn {
+    background: #17a2b8;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    margin-top: 10px;
+}
+
+.load-default-btn:hover {
+    background: #138496;
+    transform: translateY(-2px);
+}
+
+.load-default-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(23, 162, 184, 0.25);
+}
+
+.config-info {
+    margin: 20px 0;
+    padding: 20px;
+    background: #e8f4f8;
+    border-radius: 10px;
+    border: 1px solid #b8daff;
+    text-align: left;
+}
+
+.config-info h3 {
+    color: #004085;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+    font-weight: 600;
+    margin-top: 0;
+}
+
+.config-summary {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.config-summary p {
+    margin: 5px 0;
+    color: #495057;
+}
+
+.config-categories {
+    margin-top: 15px;
+}
+
+.config-categories h4 {
+    color: #004085;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+    font-weight: 500;
+}
+
+.config-categories ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px;
+}
+
+.config-categories li {
+    background: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+    font-size: 14px;
+    color: #495057;
+}
+
+.config-categories li strong {
+    color: #004085;
 }
 
 .hidden {
